@@ -266,15 +266,16 @@
 
         const decrypted = await decryptMessage(data.encrypted, secret);
         const parsed = JSON.parse(decrypted);
-        const li = document.createElement('li');
-        li.innerHTML = `
-			<img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
-			<div class="message-wrapper">
-				<span class="message-name">${parsed.nickname}</span>
-				<div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
-			</div>
-		`;
-        document.getElementById('chat').appendChild(li);
+		const li = document.createElement('li');
+		li.innerHTML = `
+		  <img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
+		  <div class="message-wrapper">
+			<span class="message-name">${parsed.nickname}</span>
+			<div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
+		  </div>`;
+		document.getElementById('chat').appendChild(li);
+		scrollToBottom(); // ✅ this triggers auto-scroll based on toggle
+		playNotification(); // optional: put this here too, if needed
       } catch (e) {
         console.warn("Decryption failed or wrong key");
       }
