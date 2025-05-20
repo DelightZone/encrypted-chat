@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Encrypted Chat</title>
+  <link rel="icon" type="image/x-icon" href="../icon.png">
   <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
   <style>
 	  :root {
@@ -222,6 +223,10 @@
 		  font-size: 0.9em;
 		}
 	  }
+	  
+	  input,textarea,button,select {
+		  font-size: 16px; /* prevents iOS zoom on focus */
+	  }
 	</style>
 </head>
 <body>
@@ -249,7 +254,7 @@
     </div>
   </div>
 
-  <audio id="ping" src="https://notificationsounds.com/storage/sounds/file-sounds-1155-pristine.mp3" preload="auto"></audio>
+  <audio id="ping" src="../alert-pop.mp3" preload="auto"></audio>
 
   <script>
 	window.onload = () => scrollToBottom(true);
