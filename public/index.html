@@ -282,8 +282,8 @@
 			<span class="message-name">${parsed.nickname}</span>
 			<div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
 		  </div>`;
-		document.getElementById('chat').prepend(li); // ← important when using column-reverse
-		// No need to call scrollToBottom unless you want smooth behavior
+		document.getElementById('chat').appendChild(li);
+		scrollToBottom(); // ✅ this triggers auto-scroll based on toggle
 		playNotification(); // optional: put this here too, if needed
       } catch (e) {
         console.warn("Decryption failed or wrong key");
