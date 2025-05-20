@@ -13,6 +13,8 @@
       --accent-color: #4fc3f7;
       --input-bg: #2c2c2c;
       --border-color: #333;
+      --scrollbar-bg: #2a2a2a;
+      --scrollbar-thumb: #555;
     }
 
     * {
@@ -27,6 +29,7 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     header {
@@ -35,6 +38,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      z-index: 2;
     }
 
     header h1 {
@@ -71,12 +75,24 @@
       flex: 1;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      position: relative;
     }
 
     #chatArea {
       flex: 1;
       overflow-y: auto;
       padding: 20px;
+      scroll-behavior: smooth;
+    }
+
+    #chatArea::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #chatArea::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 4px;
     }
 
     #chat {
@@ -86,16 +102,34 @@
     }
 
     #chat li {
-      margin-bottom: 12px;
+      margin-bottom: 20px;
       display: flex;
       align-items: flex-start;
+      gap: 10px;
     }
 
     #chat img {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      margin-right: 10px;
+      margin-top: 4px;
+    }
+
+    .message-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .message-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message-name {
+      font-weight: bold;
+      margin-bottom: 2px;
+      color: var(--accent-color);
     }
 
     .message-content {
@@ -103,28 +137,44 @@
       padding: 10px 15px;
       border-radius: 10px;
       max-width: 70%;
+      line-height: 1.4;
     }
 
     #inputArea {
       display: flex;
-      padding: 10px;
+      padding: 10px 20px;
       background-color: var(--card-bg);
       gap: 10px;
+      align-items: center;
+      border-top: 1px solid var(--border-color);
     }
 
     #msg {
       flex: 1;
       resize: none;
-      height: 60px;
+      height: 50px;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 12px 16px;
+      font-size: 1em;
+    }
+
+    #msg::placeholder {
+      color: #aaa;
     }
 
     button {
       background-color: var(--accent-color);
       color: #000;
       border: none;
-      border-radius: 8px;
-      padding: 10px 15px;
+      border-radius: 20px;
+      padding: 12px 20px;
+      font-weight: bold;
+      font-size: 1em;
       cursor: pointer;
+      transition: background 0.3s;
     }
 
     button:hover {
@@ -159,26 +209,7 @@
   <audio id="ping" src="https://notificationsounds.com/storage/sounds/file-sounds-1155-pristine.mp3" preload="auto"></audio>
 
   <script>
-    const chat = document.getElementById('chat');
-    const chatArea = document.getElementById('chatArea');
-    const ping = document.getElementById('ping');
-
-    document.getElementById('menuToggle').onclick = () => {
-      const menu = document.getElementById('settingsMenu');
-      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-    };
-
-    function scrollToBottom() {
-      chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    function playNotification() {
-      const toggle = document.getElementById('audioToggle');
-      if (toggle.checked) ping.play();
-    }
-
-    // Leave encryption and pusher logic for next update
-	    // -- Read room ID from URL or generate new
+    // -- Read room ID from URL or generate new
     const urlParams = new URLSearchParams(window.location.search);
     let room = urlParams.get('room');
     if (!room) {
@@ -284,6 +315,31 @@
         ["encrypt", "decrypt"]
       );
     }
+    const chat = document.getElementById('chat');
+    const chatArea = document.getElementById('chatArea');
+    const ping = document.getElementById('ping');
+    const msgInput = document.getElementById('msg');
+
+    document.getElementById('menuToggle').onclick = () => {
+      const menu = document.getElementById('settingsMenu');
+      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    };
+
+    function scrollToBottom() {
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function playNotification() {
+      const toggle = document.getElementById('audioToggle');
+      if (toggle.checked) ping.play();
+    }
+
+    msgInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('send').click();
+      }
+    });
   </script>
 </body>
 </html>
