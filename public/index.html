@@ -169,7 +169,7 @@
 
   async function sendSignal(signalData) {
     try {
-      await fetch('YOUR_NETLIFY_FUNCTION_URL', {
+      await fetch('https://jolly-banana-897.netlify.app/.netlify/functions/pusher-signal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room: localRoom, signalData }),
