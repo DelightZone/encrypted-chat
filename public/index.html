@@ -2,68 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Encrypted Pusher Chat</title>
+  <title>Encrypted Chat</title>
   <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
-    #messages { border: 1px solid #ccc; padding: 10px; min-height: 200px; margin-bottom: 10px; }
-    input, button { padding: 10px; width: 100%; box-sizing: border-box; }
+    body { font-family: sans-serif; padding: 20px; }
+    input, button, textarea { margin: 5px; }
   </style>
 </head>
 <body>
+
   <h1>Encrypted Chat</h1>
 
-  <div id="messages"></div>
+  <div>
+    <label>Nickname: <input id="nickname" /></label>
+    <label>Profile Pic URL: <input id="pfp" /></label><br>
+    <label>Secret Key: <input id="secret" type="password" /></label>
+  </div>
 
-  <input id="username" placeholder="Your name" />
-  <input id="text" placeholder="Type a message..." />
-  <button onclick="send()">Send</button>
+  <div>
+    <button id="createRoom">Create New Room</button>
+    <p>Room ID: <span id="roomDisplay">loading...</span></p>
+  </div>
+
+  <div>
+    <textarea id="msg" placeholder="Type a message" rows="4" cols="50"></textarea><br>
+    <button id="send">Send</button>
+  </div>
+
+  <h2>Messages:</h2>
+  <ul id="chat"></ul>
 
   <script>
-    const ENCRYPTION_KEY = "sharedpassphrase"; // use something better in real projects
-
-    // Pusher config
-    const pusher = new Pusher("e10c1ec0ce48bfccc178", {
-      cluster: "eu",
-      encrypted: true,
-    });
-
-    const channel = pusher.subscribe("chat-room");
-    channel.bind("message", function (data) {
-      const decrypted = decrypt(data.message, ENCRYPTION_KEY);
-      const el = document.createElement("div");
-      el.textContent = `${data.username}: ${decrypted}`;
-      document.getElementById("messages").appendChild(el);
-    });
-
-    function encrypt(message, key) {
-      return btoa(unescape(encodeURIComponent(message + key)));
+    // -- Read room ID from URL or generate new
+    const urlParams = new URLSearchParams(window.location.search);
+    let room = urlParams.get('room');
+    if (!room) {
+      room = Math.random().toString(36).substring(2, 10);
+      window.location.search = `?room=${room}`;
     }
+    document.getElementById('roomDisplay').textContent = room;
 
-    function decrypt(message, key) {
+    // -- Setup Pusher
+    const pusher = new Pusher('e10c1ec0ce48bfccc178', {
+      cluster: 'eu',
+    });
+    const channel = pusher.subscribe(`room-${room}`);
+
+    channel.bind('message', async function (data) {
       try {
-        const decoded = decodeURIComponent(escape(atob(message)));
-        return decoded.replace(key, "");
+        const secret = document.getElementById('secret').value;
+        if (!secret) return;
+
+        const decrypted = await decryptMessage(data.encrypted, secret);
+        const parsed = JSON.parse(decrypted);
+        const li = document.createElement('li');
+        li.innerHTML = `<img src="${parsed.pfp}" width="32" style="vertical-align:middle;"> <b>${parsed.nickname}</b>: ${parsed.text}`;
+        document.getElementById('chat').appendChild(li);
       } catch (e) {
-        return "[Decryption failed]";
+        console.warn("Decryption failed or wrong key");
       }
+    });
+
+    // -- Handle sending
+    document.getElementById('send').onclick = async () => {
+      const text = document.getElementById('msg').value;
+      const nickname = document.getElementById('nickname').value || "Anonymous";
+      const pfp = document.getElementById('pfp').value || "https://placehold.co/32";
+      const secret = document.getElementById('secret').value;
+
+      if (!text || !secret) return;
+
+      const payload = { text, nickname, pfp };
+      const encrypted = await encryptMessage(JSON.stringify(payload), secret);
+
+      await fetch('/.netlify/functions/pusher-signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          room,
+          message: encrypted
+        })
+      });
+      document.getElementById('msg').value = '';
+    };
+
+    // -- Room creation
+    document.getElementById('createRoom').onclick = () => {
+      const newRoom = Math.random().toString(36).substring(2, 10);
+      window.location.search = `?room=${newRoom}`;
+    };
+
+    // -- Encryption utils
+    async function encryptMessage(message, password) {
+      const enc = new TextEncoder();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(password);
+      const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(message)
+      );
+      return btoa([...iv, ...new Uint8Array(encrypted)].map(b => String.fromCharCode(b)).join(''));
     }
 
-    function send() {
-      const username = document.getElementById("username").value.trim();
-      const text = document.getElementById("text").value.trim();
-      if (!username || !text) return;
+    async function decryptMessage(encoded, password) {
+      const data = atob(encoded).split('').map(c => c.charCodeAt(0));
+      const iv = new Uint8Array(data.slice(0, 12));
+      const encrypted = new Uint8Array(data.slice(12));
+      const key = await deriveKey(password);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encrypted
+      );
+      return new TextDecoder().decode(decrypted);
+    }
 
-      const encrypted = encrypt(text, ENCRYPTION_KEY);
-
-      fetch("/.netlify/functions/sendMessage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, message: encrypted }),
-      });
-
-      document.getElementById("text").value = "";
+    async function deriveKey(password) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(password),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+      return crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: enc.encode("fixed_salt"), // Replace with dynamic salt if needed
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
     }
   </script>
 </body>
