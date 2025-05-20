@@ -1,29 +1,18 @@
-import Pusher from "pusher";
+const Pusher = require("pusher");
 
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
+  appId: "1995307",
+  key: "e10c1ec0ce48bfccc178",
   secret: process.env.PUSHER_SECRET,
-  cluster: process.env.PUSHER_CLUSTER,
-  useTLS: true,
+  cluster: "eu",
+  useTLS: true
 });
 
-export async function handler(event, context) {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
-  const body = JSON.parse(event.body);
-  const { room, signalData } = body;
-
-  if (!room || !signalData) {
-    return { statusCode: 400, body: "Missing room or signalData" };
-  }
-
-  try {
-    await pusher.trigger(`room-${room}`, "signal", signalData);
-    return { statusCode: 200, body: "Signal sent" };
-  } catch (err) {
-    return { statusCode: 500, body: "Error triggering Pusher event" };
-  }
-}
+exports.handler = async function (event) {
+  const { room, message } = JSON.parse(event.body);
+  await pusher.trigger(`room-${room}`, "message", { encrypted: message });
+  return {
+    statusCode: 200,
+    body: "OK"
+  };
+};
