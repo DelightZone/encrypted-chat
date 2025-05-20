@@ -178,6 +178,112 @@
     }
 
     // Leave encryption and pusher logic for next update
+	    // -- Read room ID from URL or generate new
+    const urlParams = new URLSearchParams(window.location.search);
+    let room = urlParams.get('room');
+    if (!room) {
+      room = Math.random().toString(36).substring(2, 10);
+      window.location.search = `?room=${room}`;
+    }
+    document.getElementById('roomDisplay').textContent = room;
+
+    // -- Setup Pusher
+    const pusher = new Pusher('e10c1ec0ce48bfccc178', {
+      cluster: 'eu',
+    });
+    const channel = pusher.subscribe(`room-${room}`);
+
+    channel.bind('message', async function (data) {
+      try {
+        const secret = document.getElementById('secret').value;
+        if (!secret) return;
+
+        const decrypted = await decryptMessage(data.encrypted, secret);
+        const parsed = JSON.parse(decrypted);
+        const li = document.createElement('li');
+        li.innerHTML = `<img src="${parsed.pfp}" width="32" style="vertical-align:middle;"> <b>${parsed.nickname}</b>: ${parsed.text}`;
+        document.getElementById('chat').appendChild(li);
+      } catch (e) {
+        console.warn("Decryption failed or wrong key");
+      }
+    });
+
+    // -- Handle sending
+    document.getElementById('send').onclick = async () => {
+      const text = document.getElementById('msg').value;
+      const nickname = document.getElementById('nickname').value || "Anonymous";
+      const pfp = document.getElementById('pfp').value || "https://placehold.co/32";
+      const secret = document.getElementById('secret').value;
+
+      if (!text || !secret) return;
+
+      const payload = { text, nickname, pfp };
+      const encrypted = await encryptMessage(JSON.stringify(payload), secret);
+
+      await fetch('/.netlify/functions/pusher-signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          room,
+          message: encrypted
+        })
+      });
+      document.getElementById('msg').value = '';
+    };
+
+    // -- Room creation
+    document.getElementById('createRoom').onclick = () => {
+      const newRoom = Math.random().toString(36).substring(2, 10);
+      window.location.search = `?room=${newRoom}`;
+    };
+
+    // -- Encryption utils
+    async function encryptMessage(message, password) {
+      const enc = new TextEncoder();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(password);
+      const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(message)
+      );
+      return btoa([...iv, ...new Uint8Array(encrypted)].map(b => String.fromCharCode(b)).join(''));
+    }
+
+    async function decryptMessage(encoded, password) {
+      const data = atob(encoded).split('').map(c => c.charCodeAt(0));
+      const iv = new Uint8Array(data.slice(0, 12));
+      const encrypted = new Uint8Array(data.slice(12));
+      const key = await deriveKey(password);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encrypted
+      );
+      return new TextDecoder().decode(decrypted);
+    }
+
+    async function deriveKey(password) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(password),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+      return crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: enc.encode("fixed_salt"), // Replace with dynamic salt if needed
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
   </script>
 </body>
 </html>
