@@ -2,35 +2,107 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Encrypted Chat</title>
   <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    input, button, textarea { margin: 5px; }
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --text-color: #ffffff;
+      --accent-color: #4fc3f7;
+      --input-bg: #2c2c2c;
+      --border-color: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 20px;
+    }
+
+    h1, h2 {
+      color: var(--accent-color);
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    }
+
+    input, textarea, button {
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 5px;
+      width: 100%;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: var(--accent-color);
+      color: #000;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background-color: #0288d1;
+    }
+
+    #chat {
+      list-style: none;
+      padding: 0;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    #chat li {
+      padding: 8px;
+      margin-bottom: 5px;
+      background: #2a2a2a;
+      border-radius: 8px;
+    }
+
+    #chat img {
+      border-radius: 50%;
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body>
+  <h1>✨ Encrypted Chat</h1>
 
-  <h1>Encrypted Chat</h1>
-
-  <div>
-    <label>Nickname: <input id="nickname" /></label>
-    <label>Profile Pic URL: <input id="pfp" /></label><br>
-    <label>Secret Key: <input id="secret" type="password" /></label>
+  <div class="card">
+    <label>Nickname: <input id="nickname" placeholder="Your name" /></label><br>
+    <label>Profile Pic URL: <input id="pfp" placeholder="https://..." /></label><br>
+    <label>Secret Key: <input id="secret" type="password" placeholder="Encryption key" /></label>
   </div>
 
-  <div>
+  <div class="card">
     <button id="createRoom">Create New Room</button>
     <p>Room ID: <span id="roomDisplay">loading...</span></p>
   </div>
 
-  <div>
-    <textarea id="msg" placeholder="Type a message" rows="4" cols="50"></textarea><br>
+  <div class="card">
+    <textarea id="msg" placeholder="Type a message..." rows="3"></textarea>
     <button id="send">Send</button>
   </div>
 
-  <h2>Messages:</h2>
-  <ul id="chat"></ul>
+  <div class="card">
+    <h2>Messages:</h2>
+    <ul id="chat"></ul>
+  </div>
 
   <script>
     // -- Read room ID from URL or generate new
