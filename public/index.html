@@ -227,6 +227,13 @@
 	  input,textarea,button,select {
 		  font-size: 16px; /* prevents iOS zoom on focus */
 	  }
+	  html, body {
+		height: 100%;
+	  }
+
+	  body {
+		height: var(--vh, 100vh);
+	  }
 	</style>
 </head>
 <body>
@@ -254,7 +261,7 @@
     </div>
   </div>
 
-  <audio id="ping" src="../alert-pop.mp3" preload="auto"></audio>
+  <audio id="ping" src="../alert-pop.mp3" preload="auto" playsinline></audio>
 
   <script>
 	window.onload = () => scrollToBottom(true);
@@ -388,10 +395,12 @@
       }
     }
 
-    function playNotification() {
-      const toggle = document.getElementById('audioToggle');
-      if (toggle.checked) ping.play();
-    }
+	function playNotification() {
+	  const toggle = document.getElementById('audioToggle');
+	  if (toggle.checked && !document.hasFocus()) {
+		ping.play().catch(err => console.warn("Audio play failed:", err));
+	  }
+	}
 
     msgInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -399,6 +408,17 @@
         document.getElementById('send').click();
       }
     });
+	
+	document.addEventListener('click', () => {
+	  ping.play().then(() => ping.pause()).catch(() => {});
+	}, { once: true });
+	
+	function setVH() {
+		const vh = window.innerHeight * 0.01;
+		document.documentElement.style.setProperty('--vh', `${vh}px`);
+	}
+	window.addEventListener('resize', setVH);
+	window.addEventListener('load', setVH);
   </script>
 </body>
 </html>
