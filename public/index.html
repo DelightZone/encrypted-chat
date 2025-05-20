@@ -91,6 +91,14 @@
 		scroll-behavior: smooth;
 		height: 100%;
 	  }
+	  
+	  #chatArea {
+		display: flex;
+		flex-direction: column-reverse; /* ← this is the magic */
+		overflow-y: auto;
+		padding: 20px;
+		scroll-behavior: smooth;
+	  }
 
 	  #chatArea::-webkit-scrollbar {
 		width: 8px;
@@ -244,6 +252,7 @@
   <audio id="ping" src="https://notificationsounds.com/storage/sounds/file-sounds-1155-pristine.mp3" preload="auto"></audio>
 
   <script>
+	window.onload = () => scrollToBottom(true);
     // -- Read room ID from URL or generate new
     const urlParams = new URLSearchParams(window.location.search);
     let room = urlParams.get('room');
@@ -273,8 +282,8 @@
 			<span class="message-name">${parsed.nickname}</span>
 			<div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
 		  </div>`;
-		document.getElementById('chat').appendChild(li);
-		scrollToBottom(); // ✅ this triggers auto-scroll based on toggle
+		document.getElementById('chat').prepend(li); // ← important when using column-reverse
+		// No need to call scrollToBottom unless you want smooth behavior
 		playNotification(); // optional: put this here too, if needed
       } catch (e) {
         console.warn("Decryption failed or wrong key");
