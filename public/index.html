@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Encrypted P2P Chat with Pusher + Netlify</title>
+  <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 1rem; }
+    #chat { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 1rem; }
+    #msg { width: 80%; }
+  </style>
+</head>
+<body>
+
+<h2>Encrypted P2P Chat</h2>
+
+<div>
+  <label>Room ID: <input id="room" value="myroom123"></label><br><br>
+  <label>Encryption Key: <input id="key" value="supersecretkey"></label><br><br>
+  <button id="connect">Connect</button>
+</div>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="Type message..." disabled>
+<button id="send" disabled>Send</button>
+
+<script>
+  const pusher = new Pusher('e10c1ec0ce48bfccc178', { cluster: 'eu' });
+
+  let peerConnection;
+  let dataChannel;
+  let pusherChannel;
+  let localRoom, encryptionKey;
+  let cryptoKey;
+
+  document.getElementById('connect').onclick = async () => {
+    localRoom = document.getElementById('room').value.trim();
+    encryptionKey = document.getElementById('key').value.trim();
+
+    if (!localRoom || !encryptionKey) {
+      alert('Room and key required');
+      return;
+    }
+
+    cryptoKey = await deriveKey(encryptionKey);
+
+    setupConnection();
+  };
+
+  async function deriveKey(password) {
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      "raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]
+    );
+    return await window.crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: enc.encode("some_salt"),  // Use a fixed salt or exchange it securely
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async function encryptMessage(message) {
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const encoded = enc.encode(message);
+    const ciphertext = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      encoded
+    );
+    const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), iv.byteLength);
+    return btoa(String.fromCharCode(...combined));
+  }
+
+  async function decryptMessage(data) {
+    const combined = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      ciphertext
+    );
+    const dec = new TextDecoder();
+    return dec.decode(decrypted);
+  }
+
+  function setupConnection() {
+    peerConnection = new RTCPeerConnection();
+
+    dataChannel = peerConnection.createDataChannel("chat");
+
+    dataChannel.onopen = () => {
+      document.getElementById('msg').disabled = false;
+      document.getElementById('send').disabled = false;
+      logMessage("System", "DataChannel open, you can chat now");
+    };
+
+    dataChannel.onmessage = async event => {
+      const decrypted = await decryptMessage(event.data);
+      logMessage("Peer", decrypted);
+    };
+
+    peerConnection.ondatachannel = event => {
+      dataChannel = event.channel;
+      dataChannel.onmessage = async event => {
+        const decrypted = await decryptMessage(event.data);
+        logMessage("Peer", decrypted);
+      };
+    };
+
+    peerConnection.onicecandidate = event => {
+      if (event.candidate) {
+        sendSignal({ candidate: event.candidate });
+      }
+    };
+
+    pusherChannel = pusher.subscribe(`room-${localRoom}`);
+    pusherChannel.bind("signal", async (data) => {
+      if (data.sdp) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        if (data.sdp.type === "offer") {
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+          sendSignal({ sdp: peerConnection.localDescription });
+        }
+      } else if (data.candidate) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          console.error("Error adding ICE candidate:", e);
+        }
+      }
+    });
+
+    peerConnection.createOffer().then(offer => {
+      peerConnection.setLocalDescription(offer);
+      sendSignal({ sdp: offer });
+    });
+  }
+
+  document.getElementById('send').onclick = async () => {
+    const msgInput = document.getElementById('msg');
+    const message = msgInput.value.trim();
+    if (!message) return;
+
+    const encrypted = await encryptMessage(message);
+    dataChannel.send(encrypted);
+    logMessage("You", message);
+    msgInput.value = '';
+  };
+
+  function logMessage(sender, text) {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.textContent = `${sender}: ${text}`;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function sendSignal(signalData) {
+    try {
+      await fetch('YOUR_NETLIFY_FUNCTION_URL', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: localRoom, signalData }),
+      });
+    } catch (e) {
+      console.error('Failed to send signal', e);
+    }
+  }
+</script>
+
+</body>
+</html>
