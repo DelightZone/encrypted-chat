@@ -1,135 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Encrypted WebRTC Chat</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Encrypted Pusher Chat</title>
   <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+    #messages { border: 1px solid #ccc; padding: 10px; min-height: 200px; margin-bottom: 10px; }
+    input, button { padding: 10px; width: 100%; box-sizing: border-box; }
+  </style>
 </head>
 <body>
-  <h2>Encrypted WebRTC Chat</h2>
-  <input id="roomInput" placeholder="Room ID" />
-  <input id="keyInput" placeholder="Encryption Key" />
-  <button id="joinBtn">Join Room</button>
-  <br/><br/>
-  <textarea id="chat" rows="10" cols="50" readonly></textarea><br/>
-  <input id="msgInput" placeholder="Type a message" />
-  <button id="sendBtn">Send</button>
+  <h1>Encrypted Chat</h1>
+
+  <div id="messages"></div>
+
+  <input id="username" placeholder="Your name" />
+  <input id="text" placeholder="Type a message..." />
+  <button onclick="send()">Send</button>
 
   <script>
-    // Your Pusher credentials
-    const PUSHER_KEY = 'e10c1ec0ce48bfccc178';
-    const PUSHER_CLUSTER = 'eu';
+    const ENCRYPTION_KEY = "sharedpassphrase"; // use something better in real projects
 
-    let pc;
-    let dataChannel;
-    let pusher, channel;
-    let room;
-    let encryptionKey;
+    // Pusher config
+    const pusher = new Pusher("e10c1ec0ce48bfccc178", {
+      cluster: "eu",
+      encrypted: true,
+    });
 
-    // Simple XOR encrypt/decrypt
-    function xorEncryptDecrypt(text, key) {
-      const textBytes = new TextEncoder().encode(text);
-      const keyBytes = new TextEncoder().encode(key);
-      const result = textBytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
-      return new TextDecoder().decode(result);
+    const channel = pusher.subscribe("chat-room");
+    channel.bind("message", function (data) {
+      const decrypted = decrypt(data.message, ENCRYPTION_KEY);
+      const el = document.createElement("div");
+      el.textContent = `${data.username}: ${decrypted}`;
+      document.getElementById("messages").appendChild(el);
+    });
+
+    function encrypt(message, key) {
+      return btoa(unescape(encodeURIComponent(message + key)));
     }
 
-    // Append messages to chat
-    function appendMessage(msg) {
-      const chat = document.getElementById('chat');
-      chat.value += msg + '\n';
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    document.getElementById('joinBtn').onclick = async () => {
-      room = document.getElementById('roomInput').value.trim();
-      encryptionKey = document.getElementById('keyInput').value;
-      if (!room || !encryptionKey) {
-        alert('Please enter room ID and encryption key');
-        return;
+    function decrypt(message, key) {
+      try {
+        const decoded = decodeURIComponent(escape(atob(message)));
+        return decoded.replace(key, "");
+      } catch (e) {
+        return "[Decryption failed]";
       }
+    }
 
-      pusher = new Pusher(PUSHER_KEY, { cluster: PUSHER_CLUSTER });
-      channel = pusher.subscribe(`room-${room}`);
+    function send() {
+      const username = document.getElementById("username").value.trim();
+      const text = document.getElementById("text").value.trim();
+      if (!username || !text) return;
 
-      pc = new RTCPeerConnection();
+      const encrypted = encrypt(text, ENCRYPTION_KEY);
 
-      // Data channel for sending messages (only create on initiator)
-      dataChannel = pc.createDataChannel('chat');
-      dataChannel.onmessage = e => {
-        // Decrypt incoming message
-        const decrypted = xorEncryptDecrypt(e.data, encryptionKey);
-        appendMessage(`Friend: ${decrypted}`);
-      };
-
-      pc.onicecandidate = event => {
-        if (event.candidate) {
-          sendSignal({ candidate: event.candidate });
-        }
-      };
-
-      // Handle incoming data channels (for non-initiator)
-      pc.ondatachannel = event => {
-        dataChannel = event.channel;
-        dataChannel.onmessage = e => {
-          const decrypted = xorEncryptDecrypt(e.data, encryptionKey);
-          appendMessage(`Friend: ${decrypted}`);
-        };
-      };
-
-      // Listen for signaling messages
-      channel.bind('signal', async data => {
-        if (!pc) return;
-
-        if (data.sdp) {
-          const desc = new RTCSessionDescription(data.sdp);
-          if (desc.type === 'offer') {
-            // Received offer — set remote description, create answer
-            await pc.setRemoteDescription(desc);
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            sendSignal({ sdp: pc.localDescription });
-          } else if (desc.type === 'answer') {
-            // Received answer — set remote description only if signaling state allows
-            if (pc.signalingState === 'have-local-offer') {
-              await pc.setRemoteDescription(desc);
-            }
-          }
-        } else if (data.candidate) {
-          try {
-            await pc.addIceCandidate(data.candidate);
-          } catch (e) {
-            console.error('Error adding ICE candidate:', e);
-          }
-        }
+      fetch("/.netlify/functions/sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, message: encrypted }),
       });
 
-      // Create offer (initiator)
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendSignal({ sdp: pc.localDescription });
-
-      appendMessage('You joined the room. Start chatting!');
-
-      // Send signaling via your serverless function or Pusher here
-      function sendSignal(signalData) {
-        fetch('https://jolly-banana-897.netlify.app/.netlify/functions/pusher-signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room, signalData }),
-        }).catch(console.error);
-      }
-    };
-
-    document.getElementById('sendBtn').onclick = () => {
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
-      if (!text || !dataChannel || dataChannel.readyState !== 'open') return;
-      // Encrypt before sending
-      const encrypted = xorEncryptDecrypt(text, encryptionKey);
-      dataChannel.send(encrypted);
-      appendMessage(`You: ${text}`);
-      input.value = '';
-    };
+      document.getElementById("text").value = "";
+    }
   </script>
 </body>
 </html>
