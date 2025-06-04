@@ -398,17 +398,31 @@
 
 	function playNotification() {
 	  const toggle = document.getElementById('audioToggle');
-	  if (toggle.checked && !document.hasFocus()) {
-		ping.play().catch(err => console.warn("Audio play failed:", err));
-	  }
+	  if (!toggle.checked) return;
+	
+	  // Play sound regardless of focus to avoid missing alerts while chatting
+	  ping.currentTime = 0;
+	  ping.play().catch(err => {
+	    // Common errors: user hasn't interacted with page yet
+	    // Optional: could prompt user or ignore silently
+	    console.warn("Audio play failed:", err);
+	  });
 	}
 
-    msgInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        document.getElementById('send').click();
-      }
-    });
+	msgInput.addEventListener('keydown', (e) => {
+	  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+	
+	  if (e.key === 'Enter') {
+	    if (isMobile) {
+	      // On mobile: always insert newline (do nothing special)
+	      return;
+	    }
+	    if (!e.shiftKey) {
+	      e.preventDefault();
+	      document.getElementById('send').click();
+	    }
+	  }
+	});
 	
 	document.addEventListener('click', () => {
 	  ping.play().then(() => ping.pause()).catch(() => {});
