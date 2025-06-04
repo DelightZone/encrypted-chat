@@ -573,10 +573,11 @@
 	  msgInput.style.height = Math.min(msgInput.scrollHeight, maxHeight) + 'px';
 	});
 
-    document.getElementById('menuToggle').onclick = () => {
-      const menu = document.getElementById('settingsMenu');
-      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-    };
+	document.getElementById('menuToggle').onclick = (e) => {
+	  e.stopPropagation();  // Add this to prevent document listener from firing
+	  const menu = document.getElementById('settingsMenu');
+	  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+	};
 
     function scrollToBottom(force = false) {
       const autoScroll = document.getElementById('autoscrollToggle').checked;
