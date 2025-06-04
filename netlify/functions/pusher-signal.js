@@ -1,5 +1,5 @@
 const Pusher = require("pusher");
-const fetch = require("node-fetch"); // if not available, use native `fetch`
+const fetch = require("node-fetch"); // fallback if native fetch isn't supported
 
 const pusher = new Pusher({
   appId: "1995307",
@@ -10,53 +10,57 @@ const pusher = new Pusher({
 });
 
 exports.handler = async function (event) {
+  let body;
   try {
-    const { room, message } = JSON.parse(event.body);
+    body = JSON.parse(event.body);
+  } catch (err) {
+    return {
+      statusCode: 400,
+      body: "Invalid JSON in request body"
+    };
+  }
 
-    // Trigger to Pusher
+  const { room, message } = body;
+
+  try {
+    // Always try to trigger the Pusher message first
     await pusher.trigger(`room-${room}`, "message", { encrypted: message });
+  } catch (err) {
+    console.error("Pusher trigger failed:", err);
+    return {
+      statusCode: 500,
+      body: "Failed to send Pusher message"
+    };
+  }
 
-    // Check if webhook needs to be fired
+  // Now try to fire webhook separately (fail silently)
+  try {
     const rawHooks = process.env.DISCORD_WEBHOOKS || "[]";
     const webhooks = JSON.parse(rawHooks);
 
-    // Decode encrypted payload temporarily to access key/nickname/pfp
-    // NOTE: This does NOT decrypt contents for user; just used for logic
-    const decoded = Buffer.from(message, 'base64');
-    const iv = decoded.slice(0, 12);
-    const encryptedData = decoded.slice(12);
-
-    // Optional: extract secret from request headers or force send it from client in body
-    // But here we assume the client already includes the key and meta in the encrypted data.
-
-    // Decrypt on server ONLY to match webhook condition
-    // For now we ask client to include `meta` separately
-    const { key, nickname, pfp, text } = JSON.parse(event.headers['x-message-meta'] || '{}');
+    const meta = JSON.parse(event.headers["x-message-meta"] || "{}");
+    const { key, nickname, pfp, text } = meta;
 
     for (const hook of webhooks) {
       if (hook.room === room && hook.key === key) {
-        // Send to Discord
         await fetch(hook.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username: nickname || "Anon",
             avatar_url: pfp || "https://placehold.co/32",
-            content: text || "No message content"
+            content: text || "[no message text]"
           })
         });
       }
     }
-
-    return {
-      statusCode: 200,
-      body: "Message sent + webhook (if matched)"
-    };
   } catch (err) {
-    console.error("Webhook trigger error:", err);
-    return {
-      statusCode: 500,
-      body: "Error sending message"
-    };
+    console.warn("Webhook skipped due to error:", err.message);
+    // No return — webhook errors shouldn't affect the result
   }
+
+  return {
+    statusCode: 200,
+    body: "Message sent (webhook optional)"
+  };
 };
