@@ -355,11 +355,39 @@
 	.message-content h2 { font-size: 1.2em; }
 	.message-content h3 { font-size: 1.05em; }
 
+	.message-content blockquote {
+	  border-left: 3px solid #666;
+	  padding-left: 12px;
+	  margin: 8px 0;
+	  color: #aaa;
+	  background-color: #222;
+	  border-radius: 4px;
+	}
+	
+	.message-content blockquote blockquote {
+	  margin-left: 12px;
+	  border-color: #555;
+	  color: #bbb;
+	}
+
+	header {
+	  flex-direction: column;
+	  align-items: flex-start;
+	  gap: 4px;
+	}
+	header h1 {
+	  font-size: 1.4em;
+	}
+	header small {
+	  font-style: italic;
+	  opacity: 0.7;
+	}
 	</style>
 </head>
 <body>
   <header>
-    <h1>✨ Encrypted Chat</h1>
+    <h1>Encrypted Chat</h1>
+    <small style="color: var(--accent-color); font-weight: normal; font-size: 0.8em;">Secure, real-time, encrypted messaging</small>
     <button id="menuToggle">Menu</button>
     <div id="settingsMenu">
 	<label>Nickname: <input id="nickname" placeholder="Your name" /></label>
@@ -387,6 +415,10 @@
 	  </label>
 	</div>
       <button id="createRoom">Create New Room</button>
+	<label>Switch Room:
+	  <input id="roomInput" type="text" placeholder="Enter room ID" maxlength="20" style="width: 100%; margin-top: 4px; background-color: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.9em;">
+	</label>
+	<button id="switchRoomBtn" style="width: 100%; margin-top: 8px; padding: 10px; border-radius: 12px; background-color: var(--accent-color); color: black; font-weight: bold; cursor: pointer;">Switch Room</button>
       <p>Room ID: <span id="roomDisplay">loading...</span></p>
     </div>
   </header>
@@ -434,7 +466,7 @@
 		  <img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
 		  <div class="message-wrapper">
 		    <span class="message-name">${parsed.nickname}</span>
-		    <div class="message-content">${parseDiscordMarkdown(parsed.text)}</div>
+		    <div class="message-content" id="msgContent"></div>
 		    <small class="timestamp">${time}</small>
 		  </div>`;
 		document.getElementById('chat').appendChild(li);
@@ -529,6 +561,17 @@
     const chatArea = document.getElementById('chatArea');
     const ping = document.getElementById('ping');
     const msgInput = document.getElementById('msg');
+
+	const msgInput = document.getElementById('msg');
+	
+	msgInput.style.overflowY = 'hidden';
+	msgInput.style.resize = 'none';
+	
+	msgInput.addEventListener('input', () => {
+	  msgInput.style.height = 'auto'; // reset height
+	  const maxHeight = 150; // max height in px (adjust as you want)
+	  msgInput.style.height = Math.min(msgInput.scrollHeight, maxHeight) + 'px';
+	});
 
     document.getElementById('menuToggle').onclick = () => {
       const menu = document.getElementById('settingsMenu');
@@ -649,8 +692,15 @@
 	  text = text.replace(/^## (.*)$/gm, '<h2>$1</h2>');
 	  text = text.replace(/^# (.*)$/gm, '<h1>$1</h1>');
 	
-	  // Blockquotes
-	  text = text.replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>');
+	// Handle nested blockquotes (up to any level)
+	text = text.replace(/^(>+)\s?(.*)$/gm, (match, arrows, content) => {
+	  let level = arrows.length;
+	  let block = content;
+	  for(let i=0; i<level; i++) {
+	    block = `<blockquote>${block}</blockquote>`;
+	  }
+	  return block;
+	});
 	
 	  // Bold, Italic, Underline combos
 	  text = text
@@ -661,9 +711,71 @@
 	    .replace(/\*(.*?)\*/g, '<em>$1</em>')
 	    .replace(/_(.*?)_/g, '<em>$1</em>')
 	    .replace(/~~(.*?)~~/g, '<s>$1</s>');
+		// After all other replacements in parseDiscordMarkdown(), add:
+			
+		// Linkify URLs (basic)
+		text = text.replace(
+		  /(\bhttps?:\/\/[^\s<]+)/g,
+		  '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+		);
 	
 	  return text.replace(/\n/g, '<br>');
 	}
+const msgContentDiv = li.querySelector('#msgContent');
+const rawText = parsed.text;
+
+// First parse markdown and linkify (reuse your function)
+msgContentDiv.innerHTML = parseDiscordMarkdown(rawText);
+
+// Then, find all <a> inside and for those with image/video extensions, try to load:
+
+const mediaExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.ogg'];
+
+Array.from(msgContentDiv.querySelectorAll('a')).forEach(anchor => {
+  const url = anchor.href;
+  if (mediaExtensions.some(ext => url.toLowerCase().endsWith(ext))) {
+    // Test loading
+    if (url.match(/\.(mp4|webm|ogg)$/)) {
+      // For video formats
+      const video = document.createElement('video');
+      video.src = url;
+      video.controls = true;
+      video.width = 200;
+      video.style.marginTop = '8px';
+      video.preload = 'metadata';
+      // Check if video loads metadata
+      video.addEventListener('loadedmetadata', () => {
+        anchor.insertAdjacentElement('afterend', video);
+      });
+      video.addEventListener('error', () => {
+        // Do nothing, don't show broken media
+      });
+    } else {
+      // For images
+      const img = new Image();
+      img.src = url;
+      img.style.maxWidth = '200px';
+      img.style.borderRadius = '8px';
+      img.style.marginTop = '8px';
+      img.alt = 'Image preview';
+
+      img.onload = () => {
+        anchor.insertAdjacentElement('afterend', img);
+      };
+      img.onerror = () => {
+        // If error, don't show broken image
+      };
+    }
+  }
+});
+
+document.getElementById('switchRoomBtn').onclick = () => {
+  const newRoom = document.getElementById('roomInput').value.trim();
+  if(newRoom.length > 0) {
+    window.location.search = `?room=${encodeURIComponent(newRoom)}`;
+  }
+};
+	  
   </script>
 </body>
 </html>
