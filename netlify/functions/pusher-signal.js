@@ -48,7 +48,7 @@ exports.handler = async function (event) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username: nickname || "Anon",
-            avatar_url: pfp || "https://placehold.co/32",
+            avatar_url: pfp || "https://cdn-icons-png.freepik.com/256/2115/2115958.png",
             content: text || "[no message text]"
           })
         });
