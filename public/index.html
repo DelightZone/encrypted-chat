@@ -59,23 +59,37 @@
 		cursor: pointer;
 	  }
 
-	  #settingsMenu {
-		display: none;
-		position: absolute;
-		top: 60px;
-		right: 20px;
-		background-color: var(--card-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 10px;
-		padding: 15px;
-		z-index: 100;
-	  }
-
-	  #settingsMenu label {
-		display: block;
-		margin-bottom: 10px;
-		font-size: 0.9em;
-	  }
+	#settingsMenu {
+	  display: none;
+	  position: absolute;
+	  top: 60px;
+	  right: 20px;
+	  background: linear-gradient(145deg, #1f1f1f, #2a2a2a);
+	  border: 1px solid var(--border-color);
+	  border-radius: 12px;
+	  padding: 20px;
+	  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+	  z-index: 100;
+	  min-width: 250px;
+	}
+	
+	#settingsMenu label {
+	  display: block;
+	  margin-bottom: 14px;
+	  font-size: 0.95em;
+	  color: #ccc;
+	}
+	
+	#settingsMenu input, #settingsMenu select {
+	  width: 100%;
+	  padding: 8px;
+	  margin-top: 4px;
+	  background-color: var(--input-bg);
+	  color: var(--text-color);
+	  border: 1px solid var(--border-color);
+	  border-radius: 6px;
+	  font-size: 0.9em;
+	}
 
 		#main {
 		  height: calc(var(--vh, 1vh) * 100);
@@ -231,6 +245,26 @@
 	  html {
 		height: 100%;
 	  }
+	@keyframes slideIn {
+	  from {
+	    opacity: 0;
+	    transform: translateY(20px);
+	  }
+	  to {
+	    opacity: 1;
+	    transform: translateY(0);
+	  }
+	}
+	
+	#chat li {
+	  animation: slideIn 0.3s ease;
+	}
+
+	.timestamp {
+	  font-size: 0.75em;
+	  color: #888;
+	  margin-top: 4px;
+	}
 	</style>
 </head>
 <body>
@@ -242,6 +276,13 @@
       <label>Profile Pic URL: <input id="pfp" placeholder="https://..." /></label>
       <label>Secret Key: <input id="secret" placeholder="Encryption key" /></label>
       <label><input type="checkbox" id="audioToggle" checked> Audio Notifications</label>
+	<label>Ping Sound:
+	  <select id="soundSelect">
+	    <option value="alert.mp3">Default</option>
+	    <option value="ping2.mp3">Ping 2</option>
+	    <option value="ping3.mp3">Ping 3</option>
+	  </select>
+	</label>
       <label id="autoscrollToggleLabel"><input type="checkbox" id="autoscrollToggle" checked> Auto-scroll to newest</label>
       <button id="createRoom">Create New Room</button>
       <p>Room ID: <span id="roomDisplay">loading...</span></p>
@@ -285,11 +326,14 @@
         const decrypted = await decryptMessage(data.encrypted, secret);
         const parsed = JSON.parse(decrypted);
 		const li = document.createElement('li');
+		const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		
 		li.innerHTML = `
 		  <img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
 		  <div class="message-wrapper">
-			<span class="message-name">${parsed.nickname}</span>
-			<div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
+		    <span class="message-name">${parsed.nickname}</span>
+		    <div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
+		    <small class="timestamp">${time}</small>
 		  </div>`;
 		document.getElementById('chat').appendChild(li);
 		scrollToBottom(); // ✅ this triggers auto-scroll based on toggle
@@ -396,15 +440,25 @@
       }
     }
 
+	document.addEventListener('click', (e) => {
+	  const menu = document.getElementById('settingsMenu');
+	  const toggle = document.getElementById('menuToggle');
+	  if (!menu.contains(e.target) && e.target !== toggle) {
+	    menu.style.display = 'none';
+	  }
+	});
+	  
 	function playNotification() {
 	  const toggle = document.getElementById('audioToggle');
+	  const sound = document.getElementById('soundSelect').value;
+	  const ping = document.getElementById('ping');
+	
 	  if (!toggle.checked) return;
 	
-	  // Play sound regardless of focus to avoid missing alerts while chatting
+	  if (ping.src !== sound) ping.src = sound;
+	
 	  ping.currentTime = 0;
 	  ping.play().catch(err => {
-	    // Common errors: user hasn't interacted with page yet
-	    // Optional: could prompt user or ignore silently
 	    console.warn("Audio play failed:", err);
 	  });
 	}
@@ -436,8 +490,8 @@
 	  window.addEventListener('load', setVH);
 	  
 	// Persist settings
-	const fields = ['nickname', 'pfp', 'secret', 'audioToggle', 'autoscrollToggle'];
-	
+	const fields = ['nickname', 'pfp', 'secret', 'audioToggle', 'autoscrollToggle', 'soundSelect'];
+
 	function saveSettings() {
 	  const settings = {};
 	  fields.forEach(id => {
