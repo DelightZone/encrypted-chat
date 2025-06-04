@@ -312,11 +312,15 @@
       const encrypted = await encryptMessage(JSON.stringify(payload), secret);
 
       await fetch('/.netlify/functions/pusher-signal', {
-        method: 'POST',
-        body: JSON.stringify({
-          room,
-          message: encrypted
-        })
+	  method: 'POST',
+	  headers: {
+	    'Content-Type': 'application/json',
+	    'x-message-meta': JSON.stringify({ key: secret, nickname, pfp, text })
+	  },
+	  body: JSON.stringify({
+	    room,
+	    message: encrypted
+	  })
       });
       document.getElementById('msg').value = '';
     };
