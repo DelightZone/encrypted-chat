@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Encrypted Chat</title>
-  <link rel="icon" type="image/x-icon" href="../icon.png">
+  <link rel="icon" type="image/x-icon" href="icon.png">
   <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
   <style>
 	  :root {
@@ -434,9 +434,47 @@
 	  }
 	  window.addEventListener('resize', setVH);
 	  window.addEventListener('load', setVH);
-  
-	window.addEventListener('resize', setVH);
-	window.addEventListener('load', setVH);
+	  
+	// Persist settings
+	const fields = ['nickname', 'pfp', 'secret', 'audioToggle', 'autoscrollToggle'];
+	
+	function saveSettings() {
+	  const settings = {};
+	  fields.forEach(id => {
+	    const el = document.getElementById(id);
+	    settings[id] = el.type === 'checkbox' ? el.checked : el.value;
+	  });
+	  localStorage.setItem(`chatSettings-${room}`, JSON.stringify(settings));
+	}
+	
+	function loadSettings() {
+	  const saved = localStorage.getItem(`chatSettings-${room}`);
+	  if (!saved) return;
+	  try {
+	    const settings = JSON.parse(saved);
+	    fields.forEach(id => {
+	      const el = document.getElementById(id);
+	      if (!el) return;
+	      if (el.type === 'checkbox') {
+	        el.checked = settings[id];
+	      } else {
+	        el.value = settings[id];
+	      }
+	    });
+	  } catch (e) {
+	    console.warn("Failed to load saved settings", e);
+	  }
+	}
+	
+	// Load on start
+	loadSettings();
+	
+	// Save when fields change
+	fields.forEach(id => {
+	  const el = document.getElementById(id);
+	  if (!el) return;
+	  el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', saveSettings);
+	});
   </script>
 </body>
 </html>
