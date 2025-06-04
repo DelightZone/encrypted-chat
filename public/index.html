@@ -265,6 +265,96 @@
 	  color: #888;
 	  margin-top: 4px;
 	}
+	/* Add this to your <style> section */
+	.toggle-wrapper {
+	  display: flex;
+	  align-items: center;
+	  justify-content: space-between;
+	  margin-bottom: 14px;
+	  color: #ccc;
+	  font-size: 0.95em;
+	}
+	
+	.toggle-switch {
+	  position: relative;
+	  display: inline-block;
+	  width: 42px;
+	  height: 24px;
+	}
+	
+	.toggle-switch input {
+	  opacity: 0;
+	  width: 0;
+	  height: 0;
+	}
+	
+	.toggle-slider {
+	  position: absolute;
+	  cursor: pointer;
+	  top: 0;
+	  left: 0;
+	  right: 0;
+	  bottom: 0;
+	  background-color: #444;
+	  transition: 0.3s;
+	  border-radius: 34px;
+	}
+	
+	.toggle-slider:before {
+	  position: absolute;
+	  content: "";
+	  height: 18px;
+	  width: 18px;
+	  left: 3px;
+	  bottom: 3px;
+	  background-color: white;
+	  transition: 0.3s;
+	  border-radius: 50%;
+	}
+	
+	.toggle-switch input:checked + .toggle-slider {
+	  background-color: #3ba55d;
+	}
+	
+	.toggle-switch input:checked + .toggle-slider:before {
+	  transform: translateX(18px);
+	}
+	.message-content code {
+	  background-color: #2e2e2e;
+	  padding: 2px 4px;
+	  border-radius: 4px;
+	  font-family: monospace;
+	  font-size: 0.9em;
+	}
+	
+	.message-content pre {
+	  background-color: #1a1a1a;
+	  padding: 10px;
+	  border-radius: 6px;
+	  overflow-x: auto;
+	  font-family: monospace;
+	  font-size: 0.9em;
+	  margin: 8px 0;
+	}
+	
+	.message-content blockquote {
+	  border-left: 3px solid #666;
+	  padding-left: 12px;
+	  margin: 8px 0;
+	  color: #aaa;
+	}
+	
+	.message-content h1,
+	.message-content h2,
+	.message-content h3 {
+	  margin: 8px 0;
+	  font-weight: bold;
+	}
+	
+	.message-content h1 { font-size: 1.4em; }
+	.message-content h2 { font-size: 1.2em; }
+	.message-content h3 { font-size: 1.05em; }
+
 	</style>
 </head>
 <body>
@@ -272,10 +362,16 @@
     <h1>✨ Encrypted Chat</h1>
     <button id="menuToggle">Menu</button>
     <div id="settingsMenu">
-      <label>Nickname: <input id="nickname" placeholder="Your name" /></label>
-      <label>Profile Pic URL: <input id="pfp" placeholder="https://..." /></label>
-      <label>Secret Key: <input id="secret" placeholder="Encryption key" /></label>
-      <label><input type="checkbox" id="audioToggle" checked> Audio Notifications</label>
+	<label>Nickname: <input id="nickname" placeholder="Your name" /></label>
+	<label>Profile Pic URL: <input id="pfp" placeholder="https://..." /></label>
+	<label>Secret Key: <input id="secret" placeholder="Encryption key" /></label>
+	<div class="toggle-wrapper">
+	  <label for="audioToggle">Audio Notifications</label>
+	  <label class="toggle-switch">
+	    <input type="checkbox" id="audioToggle">
+	    <span class="toggle-slider"></span>
+	  </label>
+	</div>
 	<label>Ping Sound:
 	  <select id="soundSelect">
 	    <option value="alert.mp3">Default</option>
@@ -283,7 +379,13 @@
 	    <option value="ping3.mp3">Ping 3</option>
 	  </select>
 	</label>
-      <label id="autoscrollToggleLabel"><input type="checkbox" id="autoscrollToggle" checked> Auto-scroll to newest</label>
+	<div class="toggle-wrapper">
+	  <label for="autoscrollToggle">Auto-scroll</label>
+	  <label class="toggle-switch">
+	    <input type="checkbox" id="autoscrollToggle">
+	    <span class="toggle-slider"></span>
+	  </label>
+	</div>
       <button id="createRoom">Create New Room</button>
       <p>Room ID: <span id="roomDisplay">loading...</span></p>
     </div>
@@ -332,7 +434,7 @@
 		  <img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
 		  <div class="message-wrapper">
 		    <span class="message-name">${parsed.nickname}</span>
-		    <div class="message-content">${parsed.text.replace(/\n/g, '<br>')}</div>
+		    <div class="message-content">${parseDiscordMarkdown(parsed.text)}</div>
 		    <small class="timestamp">${time}</small>
 		  </div>`;
 		document.getElementById('chat').appendChild(li);
@@ -529,6 +631,39 @@
 	  if (!el) return;
 	  el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', saveSettings);
 	});
+
+	function parseDiscordMarkdown(text) {
+	  // Escape HTML
+	  text = text.replace(/[&<>]/g, tag => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[tag]));
+	
+	  // Code blocks first
+	  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+	    return `<pre><code class="lang-${lang || ''}">${code}</code></pre>`;
+	  });
+	
+	  // Inline code
+	  text = text.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+	
+	  // Headers
+	  text = text.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+	  text = text.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+	  text = text.replace(/^# (.*)$/gm, '<h1>$1</h1>');
+	
+	  // Blockquotes
+	  text = text.replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>');
+	
+	  // Bold, Italic, Underline combos
+	  text = text
+	    .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+	    .replace(/___(.*?)___/g, '<u><em>$1</em></u>')
+	    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+	    .replace(/__(.*?)__/g, '<u>$1</u>')
+	    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+	    .replace(/_(.*?)_/g, '<em>$1</em>')
+	    .replace(/~~(.*?)~~/g, '<s>$1</s>');
+	
+	  return text.replace(/\n/g, '<br>');
+	}
   </script>
 </body>
 </html>
