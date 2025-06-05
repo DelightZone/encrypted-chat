@@ -440,6 +440,14 @@
     </div>
   </div>
 
+  <div id="imageWarningPopup" style="display:none; position:fixed; top:30%; left:50%; transform:translateX(-50%); background:#222; color:#eee; padding:20px; border-radius:8px; z-index:1000; max-width:90%; box-shadow: 0 0 10px #000;">
+	  <p><strong>Warning:</strong> This link does not appear to be a valid image or is from an untrusted source.</p>
+	  <p>Link: <span id="popupLink" style="word-break:break-word;"></span></p>
+	  <p>Please be cautious about third-party websites.</p>
+	  <button id="trustBtn">Trust this website</button>
+	  <button id="closePopupBtn">Close</button>
+  </div>
+
   <audio id="ping" src="alert.mp3" preload="auto" playsinline></audio>
 
   <script>
@@ -473,7 +481,7 @@
 		  <img src="${parsed.pfp}" width="32" style="vertical-align:middle;">
 		  <div class="message-wrapper">
 		    <span class="message-name">${parsed.nickname}</span>
-		    <div class="message-content">${parseDiscordMarkdown(parsed.text)}</div>
+		    <div class="message-content">${renderMessage(parsed.text)}</div>
 		    <small class="timestamp">${time}</small>
 		  </div>`;
 	        playNotification(); // optional: put this here too, if needed
@@ -709,6 +717,94 @@
 	  msg.style.height = 'auto'; // Reset first
 	  msg.style.height = Math.min(msg.scrollHeight, window.innerHeight * 0.5) + 'px';
 	});
+	  
+	function extractDomain(url) {
+	  try {
+	    return new URL(url).hostname;
+	  } catch {
+	    return null;
+	  }
+	}
+
+	function isImageLink(url) {
+	  return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
+	}
+
+	function isTrustedDomain(domain) {
+	  const trusted = JSON.parse(localStorage.getItem('trustedDomains') || '[]');
+	  return trusted.includes(domain);
+	}
+	
+	function addTrustedDomain(domain) {
+	  const trusted = JSON.parse(localStorage.getItem('trustedDomains') || '[]');
+	  if (!trusted.includes(domain)) {
+	    trusted.push(domain);
+	    localStorage.setItem('trustedDomains', JSON.stringify(trusted));
+	  }
+	}
+
+	const popup = document.getElementById('imageWarningPopup');
+	const popupLink = document.getElementById('popupLink');
+	const trustBtn = document.getElementById('trustBtn');
+	const closePopupBtn = document.getElementById('closePopupBtn');
+	
+	let currentPopupDomain = null;
+	
+	trustBtn.onclick = () => {
+	  if (currentPopupDomain) {
+	    addTrustedDomain(currentPopupDomain);
+	  }
+	  popup.style.display = 'none';
+	};
+	
+	closePopupBtn.onclick = () => {
+	  popup.style.display = 'none';
+	};
+
+	async function renderMessage(msgText, container) {
+	  // Detect image links in message (simple example: full msg is just a link)
+	  if (isImageLink(msgText)) {
+	    const domain = extractDomain(msgText);
+	
+	    if (!domain) {
+	      // invalid URL, just display text
+	      parseDiscordMarkdown(msgText);
+	      return;
+	    }
+	
+	    if (isTrustedDomain(domain)) {
+	      // Just show image directly
+	      const img = document.createElement('img');
+	      img.src = msgText;
+	      img.alt = 'Image';
+	      img.style.maxWidth = '100%';
+	      container.appendChild(img);
+	      return;
+	    }
+	
+	    // Try to preload image to check if valid
+	    const img = new Image();
+	    img.src = msgText;
+	
+	    img.onload = () => {
+	      container.appendChild(img);
+	    };
+	
+	    img.onerror = () => {
+	      // Show warning popup
+	      popupLink.textContent = msgText;
+	      currentPopupDomain = domain;
+	      popup.style.display = 'block';
+	
+	      // Show message text as fallback
+	      parseDiscordMarkdown(msgText);
+	    };
+	
+	  } else {
+	    // Normal message, just text
+	    parseDiscordMarkdown(msgText);
+	  }
+	}
 </script>
 </body>
 </html>
