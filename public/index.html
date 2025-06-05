@@ -394,6 +394,9 @@
 	  background-color: var(--input-bg);
 	  color: var(--text-color);
 	}
+	#msg {
+	  transition: height 0.2s ease;
+	}
 	</style>
 </head>
 <body>
@@ -508,6 +511,7 @@
 	  })
       });
       document.getElementById('msg').value = '';
+      msg.style.height = 'auto'; // ✅ reset the height visually too
     };
 
     // -- Room creation
@@ -704,9 +708,13 @@
 	  return text.replace(/\n/g, '<br>');
 	}
 	const msg = document.getElementById('msg');
-	msg.addEventListener('input', () => {
-	  msg.style.height = 'auto'; // Reset first
-	  msg.style.height = Math.min(msg.scrollHeight, window.innerHeight * 0.5) + 'px';
+	msg.value = '';
+	msg.style.height = msg.scrollHeight + 'px'; // Trigger for current height
+	requestAnimationFrame(() => {
+	  msg.style.height = '0px'; // Collapse to 0 with animation
+	  requestAnimationFrame(() => {
+	    msg.style.height = ''; // Reset to auto after animation (optional)
+	  });
 	});
 </script>
 </body>
