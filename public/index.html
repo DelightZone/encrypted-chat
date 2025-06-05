@@ -703,6 +703,11 @@
 	
 	  return text.replace(/\n/g, '<br>');
 	}
-  </script>
+	const msg = document.getElementById('msg');
+	msg.addEventListener('input', () => {
+	  msg.style.height = 'auto'; // Reset first
+	  msg.style.height = Math.min(msg.scrollHeight, window.innerHeight * 0.5) + 'px';
+	});
+</script>
 </body>
 </html>
